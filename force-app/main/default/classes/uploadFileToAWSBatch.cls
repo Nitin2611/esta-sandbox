@@ -1,7 +1,10 @@
 global class uploadFileToAWSBatch implements Database.Batchable<sObject>, Database.AllowsCallouts {
     public Database.QueryLocator start(Database.BatchableContext bc) {
         return Database.getQueryLocator(
-            [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000Hhq9IAC' OR Id = '068Aa000000I6IHIA0']
+            // [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000Hhq9IAC' OR Id = '068Aa000000I6IHIA0']
+            [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000Hhq9IAC']
+            // [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000I0ZRIA0']
+            // [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000HghBIAS' OR Id = '068Aa000000I6mvIAC']
         );
     }
 
@@ -14,7 +17,7 @@ global class uploadFileToAWSBatch implements Database.Batchable<sObject>, Databa
     }
 
     public void UploadDocuments(List<ContentVersion> contentVersionsList) {
-        NamedCredential named=[SELECT DeveloperName, Endpoint FROM NamedCredential where DeveloperName='aws_s3'];
+        NamedCredential named = [SELECT DeveloperName, Endpoint FROM NamedCredential where DeveloperName='aws_s3'];
         for(ContentVersion attach: contentVersionsList) {
             try {
                 Integer lengthOfFile = EncodingUtil.base64Encode(attach.VersionData).Length();
@@ -77,13 +80,22 @@ global class uploadFileToAWSBatch implements Database.Batchable<sObject>, Databa
 
     public void requestUploadMultiPart(String url, Integer start, Integer endd, Blob body, Integer i, String fileName, String FileExe, Boolean flag, String uploadId, Integer chunkSize) {
         System.debug('** start ==>' + start + ' -- endd ==>' + endd);
-        Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, chunkSize));
+        System.debug('Heap size current ==> ' + Limits.getHeapSize());
+        System.debug('Heap size Limit ==> ' + Limits.getLimitHeapSize());
+        // System.debug('attachmentBody ==>'+attachmentBody);
+        // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, chunkSize));
+
+        String attachmentBody = EncodingUtil.base64Encode(body).mid(start, chunkSize);
+        System.debug('attachmentBody =>' + attachmentBody);
+        Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody);
+
+        System.debug('Heap size current ==> ' + Limits.getHeapSize());
+        System.debug('Heap size Limit ==> ' + Limits.getLimitHeapSize());
 
         HttpRequest request = new HttpRequest();
         request.setMethod('PUT');
         request.setEndpoint(url);
         request.setBodyAsBlob(chunkBlob);
-        // request.setBodyAsBlob(EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, chunkSize)));
         
         Http http = new Http();
         HTTPResponse response = http.send(request);
@@ -96,13 +108,12 @@ global class uploadFileToAWSBatch implements Database.Batchable<sObject>, Databa
         } else {
             System.debug('Error uploading chunk ' + i + ': ' + response.getBody());
         }
-        
         if(flag){
             completeFile(fileName, FileExe, uploadId, String.valueOf(i));
         }
     }
 
-    public static void completeFile(String filename, String fileExtansion, String uploadId, String maxPart) {
+    public void completeFile(String filename, String fileExtansion, String uploadId, String maxPart) {
         HttpRequest reqLs = new HttpRequest();
         reqLs.setMethod('GET');
         reqLs.setEndpoint('callout:aws_s3/test-mv-1/' + filename + '.' + fileExtansion + '?uploadId=' + uploadId + '&max-parts=' + maxPart + '&part-number-marker=0');

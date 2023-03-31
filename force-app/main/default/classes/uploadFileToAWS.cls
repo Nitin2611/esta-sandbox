@@ -132,14 +132,15 @@ public class uploadFileToAWS {
         
         System.debug('** start ==>' + start + ' -- endd ==>' + (endd+1));
         
-        // String attachmentBody = EncodingUtil.base64Encode(body);
-        // System.debug('*** Length of String ==>' + EncodingUtil.base64Encode(body).Length());
+        String attachmentBody = EncodingUtil.base64Encode(body);
+        System.debug('*** Length of String ==>' + attachmentBody);
         // Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody.mid(start, endd));
         // Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody.substring(start, (endd+1)));
         
         // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).substring(start, (endd+1)));
 
-        Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, 7 * 1000 * 1000));
+        // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, 7 * 1000 * 1000));
+        Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody.mid(start, 7 * 1000 * 1000));
 
         // if (flag) {
         //     // 32095088

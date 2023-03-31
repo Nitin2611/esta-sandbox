@@ -1,7 +1,8 @@
 global class AwsLobBatch implements Database.Batchable<sObject>, Database.AllowsCallouts {
     public Database.QueryLocator start(Database.BatchableContext bc) {    
-        return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id=: '068Aa000000I0ZRIA0' ]);
+        // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id=: '068Aa000000I0ZRIA0' ]);
         // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id=: '068Aa000000HginIAC' ]);
+        return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id = '068Aa000000Hhq9IAC' ]);  //10 MB
     }
     global void execute(Database.BatchableContext bc, List<ContentVersion> records){
 
@@ -67,9 +68,11 @@ global class AwsLobBatch implements Database.Batchable<sObject>, Database.Allows
             Integer chunkLength = chunkEnd - chunkStart + 1;
 
             if(i== (totalChunks-1)) {
+                system.debug( 'IFFF Heap size is ' + limits.getHeapSize() + ' enforced is ' + limits.getLimitHeapSize());
 	            submethod(presignedUrl,chunkStart,chunkEnd,attach.VersionData,fileBlob.size(),partNumber,attach.Title,attach.FileExtension,true,uploadid);
 
             } else {
+                system.debug( 'ELSEE : Heap size is ' + limits.getHeapSize() + ' enforced is ' + limits.getLimitHeapSize());
 	            submethod(presignedUrl,chunkStart,chunkEnd,attach.VersionData,fileBlob.size(),partNumber,attach.Title,attach.FileExtension,false,uploadid);
             }
             partNumber++;
@@ -85,15 +88,24 @@ global class AwsLobBatch implements Database.Batchable<sObject>, Database.Allows
         System.debug('Start ---->' + start);
         System.debug('End ---->' + endd);
 
-        // String attachmentBody = EncodingUtil.base64Encode(body).substring(start, endd + 1);
-        // Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody);
+
+        String attachmentBody = EncodingUtil.base64Encode(body).substring(start, endd + 1);
+        // System.debug('attachmentBody-->'+attachmentBody);
+        Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody);
         // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).substring(start, endd + 1));
-        Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, 7 * 1024 * 1024));
+
+        // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, 7 * 1024 * 1024));
+        // System.debug('chunkBlob-->'+chunkBlob);
+        // System.debug('chunkBlob-->'+chunkBlob.size());
+
+        System.debug('A');
 
         HttpRequest request = new HttpRequest();
         request.setMethod('PUT');
         request.setEndpoint(url);
         request.setBodyAsBlob(chunkBlob);
+
+        System.debug('B');
         
         Http http = new Http();
         HTTPResponse response = http.send(request);
