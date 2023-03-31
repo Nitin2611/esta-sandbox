@@ -46,12 +46,18 @@ public class uploadFileToAWS {
     *********/
     
     public void UploadDocuments(List<Id> cvIds) {
-        List<ContentVersion> versions=[SELECT VersionData,Title,ContentDocumentId,FileExtension FROM ContentVersion WHERE Id IN: cvIds];
+        // List<ContentVersion> versions=[SELECT VersionData,Title,ContentDocumentId,FileExtension FROM ContentVersion WHERE Id IN: cvIds];
         //Get Named Credential - get configured s3 url
         NamedCredential named=[SELECT DeveloperName, Endpoint FROM NamedCredential where DeveloperName='aws_s3'];
-        for(ContentVersion attach:versions) {
+        
+        // for(ContentVersion attach:versions) {
+        for(ContentVersion attach: [SELECT VersionData,Title,ContentDocumentId,FileExtension FROM ContentVersion WHERE Id IN: cvIds]) {
             try {
+
+                Integer sizeEncodeString = EncodingUtil.base64Encode(attach.VersionData).Length();
                 
+                System.debug('*** Length of sizeEncodeString ==>' + sizeEncodeString);
+
                 // Creating Multipart Upload
                 //String attachmentBody = EncodingUtil.base64Encode(attach.VersionData);
                 String formattedDateString = Datetime.now().formatGMT('EEE, dd MMM yyyy HH:mm:ss z');
@@ -77,7 +83,7 @@ public class uploadFileToAWS {
                 system.debug('Response Status code------> '+res.getStatusCode());
                 system.debug('Response Status------> '+res.getStatus());
                 
-                uploadmultipart(attach,uploadId);
+                uploadmultipart(attach,uploadId, sizeEncodeString);
                 
             } catch (Exception e) {
                 System.debug('In the catch block of UploadDocuments ==>');
@@ -87,13 +93,15 @@ public class uploadFileToAWS {
         }
     }
 
-    public void uploadmultipart(ContentVersion attach, String uploadid) {
+    public void uploadmultipart(ContentVersion attach, String uploadid, Integer sizeEncodeString) {
 
         System.debug('uploadmultipart');
-        Integer chunkSize = 7 * 1024 * 1024; // 5 MB
+        // Integer chunkSize = 7 * 1024 * 1024; // 5 MB
+        Integer chunkSize = 7 * 1000 * 1000; // 5 MB
         Blob fileBlob = attach.VersionData;// get the file blob to be uploaded
         //Integer totalChunks = integer.valueOf(Math.ceil(fileBlob.size() / chunkSize));
-        Integer totalChunks = integer.valueOf(Math.ceil(Decimal.valueOf(fileBlob.size()).divide(chunkSize, /*digits*/ 1)));
+        // Integer totalChunks = integer.valueOf(Math.ceil(Decimal.valueOf(fileBlob.size()).divide(chunkSize, /*digits*/ 1)));
+        Integer totalChunks = integer.valueOf(Math.ceil(Decimal.valueOf(sizeEncodeString).divide(chunkSize, /*digits*/ 1)));
         String presignedUrl = '';
         Integer partNumber =1;
         System.debug('totalChunks size ==>' + totalChunks);
@@ -121,51 +129,32 @@ public class uploadFileToAWS {
     @future(callout=true)
     public static void submethod(String url,Integer start,Integer endd,Blob body,Integer sizeFile,Integer i,String fileName,String FileExe,Boolean flag,String uploadId) {
         
-        System.debug('** start ==>' + start + ' -- endd ==>' + endd);
+        System.debug('** start ==>' + start + ' -- endd ==>' + (endd+1));
         
         // String attachmentBody = EncodingUtil.base64Encode(body);
+        // System.debug('*** Length of String ==>' + EncodingUtil.base64Encode(body).Length());
         // Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody.mid(start, endd));
-
-        // HttpRequest request = new HttpRequest();
-        // request.setMethod('PUT');
-        // request.setEndpoint(url);
-        // request.setBodyAsBlob(chunkBlob);
+        // Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody.substring(start, (endd+1)));
         
-        // Http http = new Http();
-        // HTTPResponse response = http.send(request);
+        // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).substring(start, (endd+1)));
 
+        Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, 7 * 1000 * 1000));
 
-        String attachmentBody = EncodingUtil.base64Encode(body);
-        Blob chunkBlob ;
-        
-        Integer bodyLength = attachmentBody.length();
-        Integer chunkSize = 7 * 1024 * 1024; // 5 MB
-        Integer partEnd = chunkSize;
+        // if (flag) {
+        //     // 32095088
+        //     // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, endd));
+        //     Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, 7 * 1000 * 1000));
 
-        // chunkBlob = EncodingUtil.base64Decode(attachmentBody.substring(start, endd+1));
-        chunkBlob = EncodingUtil.base64Decode(attachmentBody.substring(start, endd));
-
-        // for(Integer inc=0; inc<bodyLength; inc+=chunkSize) {
-        //     system.debug('inc ==>' + inc + ' --partEnd ==>' + partEnd + ' -- bodyLength ==>' + bodyLength);
-        //     if(bodyLength > partEnd) {
-        //         // strList.add(str.substring(inc, partEnd));
-        //         // System.debug(' Part ==>' + str.substring(inc, partEnd));
-        //         chunkBlob = EncodingUtil.base64Decode(attachmentBody.substring(inc, partEnd));
-        //         partEnd = partEnd + chunkSize;
-        //     } else {
-        //         // strList.add(str.substring(inc, bodyLength));
-        //         // System.debug(' Part ==>' + str.substring(inc, bodyLength));
-        //         chunkBlob = EncodingUtil.base64Decode(attachmentBody.substring(inc, bodyLength));
-        //         break;
-        //     }
-
+        //     // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, endd));
+        // } else {
+        //     Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, 7 * 1000 * 1000));
         // }
 
         HttpRequest request = new HttpRequest();
         request.setMethod('PUT');
         request.setEndpoint(url);
         request.setBodyAsBlob(chunkBlob);
-
+        
         Http http = new Http();
         HTTPResponse response = http.send(request);
 
@@ -185,6 +174,67 @@ public class uploadFileToAWS {
         }
     }
     
+    // public static void completeFile(String filename,String fileExtansion,String uploadId, String maxPart) {
+
+    //     System.debug(' maxPart =>' + maxPart);
+
+    //     HttpRequest reqLs = new HttpRequest();
+    //     reqLs.setMethod('GET');
+    //     reqLs.setEndpoint('callout:aws_s3/test-mv-1/' + filename + '.' + fileExtansion + '?uploadId=' + uploadId + '&max-parts=' + maxPart + '&part-number-marker=0');
+
+    //     Http httpLs = new Http();
+    //     HTTPResponse resLs = httpLs.send(reqLs);
+
+    //     system.debug('Response Body ------> '+resLs.getBody());
+    //     system.debug('Status code httpCmp------> '+resLs.getStatusCode());
+    //     system.debug('Status httpCmp------> '+resLs.getStatus());
+
+    //     String responseBody = resLs.getBody();
+
+    //     String etagListStr = '';
+    //     if (responseBody != null && responseBody.contains('UploadId')) {
+    //         etagListStr = responseBody.substringBetween('</IsTruncated>', '</ListPartsResult>');
+    //     }
+        
+    //     Boolean tracker = true;
+    //     Map<String, String> eTagMap = new Map<String, String>();
+    //     While(tracker){
+    //         String refPartString = etagListStr.substringBetween('<Part>','</Part>');
+    //         String refPartNumberString = etagListStr.substringBetween('<Part>','</Part>');
+    //         System.debug(refPartString);
+    //         if(refPartString != null && refPartString != ''){
+    //             eTagMap.put(refPartNumberString.subStringBetween('<PartNumber>','</PartNumber>') ,refPartString.subStringBetween('<ETag>&quot;','&quot;</ETag>'));
+    //             etagListStr = etagListStr.replace('<Part>' + refPartString + '</Part>','');
+    //             etagListStr = etagListStr.replace('<PartNumber>' + refPartNumberString + '</PartNumber>','');
+    //         }else{
+    //             tracker = false;
+    //         }
+    //     }
+    //     System.debug('eTagMap ==>' + eTagMap);
+        
+
+    //     HttpRequest reqCmp = new HttpRequest();
+    //     reqCmp.setMethod('POST');
+    //     reqCmp.setEndpoint('callout:aws_s3/test-mv-1/' + filename + '.' + fileExtansion + '?uploadId=' + uploadId);
+
+    //     String body = '';
+    //     body += '<CompleteMultipartUpload>';
+    //     for(String i: eTagMap.keySet()){
+    //         body += '<Part><PartNumber>'+i+'</PartNumber><ETag>'+eTagMap.get(i)+'</ETag></Part>';
+    //     }
+    //     body += '</CompleteMultipartUpload>';
+    //     system.debug('body ==>' + body);
+    //     reqCmp.setBody(body);
+        
+    //     Http httpCmp = new Http();
+    //     HTTPResponse resCmp = httpCmp.send(reqCmp);
+        
+    //     system.debug('Status code httpCmp------> '+resCmp.getStatusCode());
+    //     system.debug('Status httpCmp------> '+resCmp.getStatus());
+    //     system.debug('Body httpCmp------> '+resCmp.getBody());
+    // }
+
+
     public static void completeFile(String filename,String fileExtansion,String uploadId, String maxPart) {
 
         System.debug(' maxPart =>' + maxPart);
@@ -195,7 +245,7 @@ public class uploadFileToAWS {
         
         Map<String, String> eTagMap = new Map<String, String>();
 
-        While(String.ValueOf(eTagMap.size()) == maxPart){
+        While(String.ValueOf(eTagMap.size()) != maxPart){
 
             Http httpLs = new Http();
             HTTPResponse resLs = httpLs.send(reqLs);
@@ -236,9 +286,12 @@ public class uploadFileToAWS {
 
         String body = '';
         body += '<CompleteMultipartUpload>';
-        for(String i: eTagMap.keySet()){
-            body += '<Part><PartNumber>'+i+'</PartNumber><ETag>'+eTagMap.get(i)+'</ETag></Part>';
+        for(Integer ss = 1;ss<=eTagMap.keyset().size();ss++){
+            body += '<Part><PartNumber>'+String.valueOf(ss)+'</PartNumber><ETag>'+eTagMap.get(String.valueOf(ss))+'</ETag></Part>';
         }
+        // for(String i: eTagMap.keySet()){
+        //     body += '<Part><PartNumber>'+i+'</PartNumber><ETag>'+eTagMap.get(i)+'</ETag></Part>';
+        // }
         body += '</CompleteMultipartUpload>';
         system.debug('body ==>' + body);
         reqCmp.setBody(body);
@@ -248,6 +301,68 @@ public class uploadFileToAWS {
         
         system.debug('Status code httpCmp------> '+resCmp.getStatusCode());
         system.debug('Status httpCmp------> '+resCmp.getStatus());
+        system.debug('Status httpCmp------> '+resCmp.getBody());
     }
+
+
+    // public static void completeFile(String filename,String fileExtansion,String uploadId, String maxPart) {
+
+    //     System.debug(' maxPart =>' + maxPart);
+
+    //     HttpRequest reqLs = new HttpRequest();
+    //     reqLs.setMethod('GET');
+    //     reqLs.setEndpoint('callout:aws_s3/test-mv-1/' + filename + '.' + fileExtansion + '?uploadId=' + uploadId + '&max-parts=' + maxPart + '&part-number-marker=0');
+
+    //     Http httpLs = new Http();
+    //     HTTPResponse resLs = httpLs.send(reqLs);
+
+    //     system.debug('Response Body ------> '+resLs.getBody());
+    //     system.debug('Status code httpCmp------> '+resLs.getStatusCode());
+    //     system.debug('Status httpCmp------> '+resLs.getStatus());
+
+    //     String responseBody = resLs.getBody();
+
+    //     String etagListStr = '';
+    //     if (responseBody != null && responseBody.contains('UploadId')) {
+    //         etagListStr = responseBody.substringBetween('</IsTruncated>', '</ListPartsResult>');
+    //     }
+        
+    //     Boolean tracker = true;
+    //     Map<String, String> eTagMap = new Map<String, String>();
+    //     While(tracker){
+    //         String refPartString = etagListStr.substringBetween('<Part>','</Part>');
+    //         String refPartNumberString = etagListStr.substringBetween('<Part>','</Part>');
+    //         System.debug(refPartString);
+    //         if(refPartString != null && refPartString != ''){
+    //             eTagMap.put(refPartNumberString.subStringBetween('<PartNumber>','</PartNumber>') ,refPartString.subStringBetween('<ETag>&quot;','&quot;</ETag>'));
+    //             etagListStr = etagListStr.replace('<Part>' + refPartString + '</Part>','');
+    //             etagListStr = etagListStr.replace('<PartNumber>' + refPartNumberString + '</PartNumber>','');
+    //         }else{
+    //             tracker = false;
+    //         }
+    //     }
+    //     System.debug('eTagMap ==>' + eTagMap);
+        
+
+    //     HttpRequest reqCmp = new HttpRequest();
+    //     reqCmp.setMethod('POST');
+    //     reqCmp.setEndpoint('callout:aws_s3/test-mv-1/' + filename + '.' + fileExtansion + '?uploadId=' + uploadId);
+
+    //     String body = '';
+    //     body += '<CompleteMultipartUpload>';
+    //     for(String i: eTagMap.keySet()){
+    //         body += '<Part><PartNumber>'+i+'</PartNumber><ETag>'+eTagMap.get(i)+'</ETag></Part>';
+    //     }
+    //     body += '</CompleteMultipartUpload>';
+    //     system.debug('body ==>' + body);
+    //     reqCmp.setBody(body);
+        
+    //     Http httpCmp = new Http();
+    //     HTTPResponse resCmp = httpCmp.send(reqCmp);
+        
+    //     system.debug('Status code httpCmp------> '+resCmp.getStatusCode());
+    //     system.debug('Status httpCmp------> '+resCmp.getStatus());
+    //     system.debug('Body httpCmp------> '+resCmp.getBody());
+    // }
     
 }
