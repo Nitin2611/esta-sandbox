@@ -55,6 +55,7 @@ public class uploadFileToAWS {
             try {
 
                 Integer sizeEncodeString = EncodingUtil.base64Encode(attach.VersionData).Length();
+                // Integer sizeEncodeString = 140340268;
                 
                 System.debug('*** Length of sizeEncodeString ==>' + sizeEncodeString);
 
@@ -98,10 +99,10 @@ public class uploadFileToAWS {
         System.debug('uploadmultipart');
         // Integer chunkSize = 7 * 1024 * 1024; // 5 MB
         Integer chunkSize = 7 * 1000 * 1000; // 5 MB
-        Blob fileBlob = attach.VersionData;// get the file blob to be uploaded
+        // Blob fileBlob = attach.VersionData;// get the file blob to be uploaded
         //Integer totalChunks = integer.valueOf(Math.ceil(fileBlob.size() / chunkSize));
         // Integer totalChunks = integer.valueOf(Math.ceil(Decimal.valueOf(fileBlob.size()).divide(chunkSize, /*digits*/ 1)));
-        Integer totalChunks = integer.valueOf(Math.ceil(Decimal.valueOf(sizeEncodeString).divide(chunkSize, /*digits*/ 1)));
+        Integer totalChunks = integer.valueOf(Math.ceil(Decimal.valueOf(sizeEncodeString).divide(chunkSize, /*digits*/ 8)));
         String presignedUrl = '';
         Integer partNumber =1;
         System.debug('totalChunks size ==>' + totalChunks);
@@ -109,7 +110,7 @@ public class uploadFileToAWS {
         for (Integer i = 0; i < totalChunks; i++) {
             presignedUrl = 'callout:aws_s3/test-mv-1/' + attach.Title + '.' + attach.FileExtension + '?partNumber=' + partNumber + '&uploadId=' + uploadid;
             Integer chunkStart = i * chunkSize;
-            Integer chunkEnd = Math.min((i + 1) * chunkSize - 1, fileBlob.size() - 1);
+            Integer chunkEnd = Math.min((i + 1) * chunkSize - 1, attach.VersionData.size() - 1);
             Integer chunkLength = chunkEnd - chunkStart + 1;
             
             System.debug('Heap size current ==> ' + Limits.getHeapSize());
@@ -118,9 +119,9 @@ public class uploadFileToAWS {
             System.debug('cn ** ==> ' + (totalChunks-1) + ' ** i ==>' + i);
 
             if(i== (totalChunks-1)) {
-	            uploadFileToAWS.submethod(presignedUrl,chunkStart,chunkEnd,attach.VersionData,fileBlob.size(),partNumber,attach.Title,attach.FileExtension,true,uploadid);
+	            uploadFileToAWS.submethod(presignedUrl,chunkStart,chunkEnd,attach.VersionData,attach.VersionData.size(),partNumber,attach.Title,attach.FileExtension,true,uploadid);
             } else {
-	            uploadFileToAWS.submethod(presignedUrl,chunkStart,chunkEnd,attach.VersionData,fileBlob.size(),partNumber,attach.Title,attach.FileExtension,false,uploadid);
+	            uploadFileToAWS.submethod(presignedUrl,chunkStart,chunkEnd,attach.VersionData,attach.VersionData.size(),partNumber,attach.Title,attach.FileExtension,false,uploadid);
             }
             partNumber++;
         }
