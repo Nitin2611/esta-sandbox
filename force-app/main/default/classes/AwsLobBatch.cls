@@ -3,6 +3,7 @@ global class AwsLobBatch implements Database.Batchable<sObject>, Database.Allows
         // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id=: '068Aa000000I0ZRIA0' ]);
         // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id=: '068Aa000000HginIAC' ]);
         return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id = '068Aa000000Hhq9IAC' ]);  //10 MB
+        // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id = '068Aa000000I0ZRIA0' ]);  //100 MB
     }
     global void execute(Database.BatchableContext bc, List<ContentVersion> records){
 
@@ -89,12 +90,14 @@ global class AwsLobBatch implements Database.Batchable<sObject>, Database.Allows
         System.debug('End ---->' + endd);
 
 
-        String attachmentBody = EncodingUtil.base64Encode(body).substring(start, endd + 1);
+        // String attachmentBody = EncodingUtil.base64Encode(body).substring(start, endd + 1);
         // System.debug('attachmentBody-->'+attachmentBody);
-        Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody);
+        // Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody);
         // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).substring(start, endd + 1));
 
-        // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).mid(start, 7 * 1024 * 1024));
+        String attachmentBody = EncodingUtil.base64Encode(body).mid(start, 7 * 1024 * 1024);
+        System.debug('attachmentBody-->'+attachmentBody);
+        Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody);
         // System.debug('chunkBlob-->'+chunkBlob);
         // System.debug('chunkBlob-->'+chunkBlob.size());
 

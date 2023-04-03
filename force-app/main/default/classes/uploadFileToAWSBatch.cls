@@ -2,21 +2,22 @@ global class uploadFileToAWSBatch implements Database.Batchable<sObject>, Databa
     public Database.QueryLocator start(Database.BatchableContext bc) {
         return Database.getQueryLocator(
             // [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000Hhq9IAC' OR Id = '068Aa000000I6IHIA0']
-            [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000Hhq9IAC']
-            // [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000I0ZRIA0']
+            // [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000Hhq9IAC']
+            [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000I0ZRIA0']
             // [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000HghBIAS' OR Id = '068Aa000000I6mvIAC']
+            // [SELECT Id, Title, VersionData, FileExtension, contentsize FROM ContentVersion ]
         );
     }
 
     global void execute(Database.BatchableContext bc, List<ContentVersion> records) {
-        UploadDocuments(records);
+        uploadFileToAWSBatch.UploadDocuments(records);
     }
 
     global void finish(Database.BatchableContext bc){
 
     }
 
-    public void UploadDocuments(List<ContentVersion> contentVersionsList) {
+    public static void UploadDocuments(List<ContentVersion> contentVersionsList) {
         NamedCredential named = [SELECT DeveloperName, Endpoint FROM NamedCredential where DeveloperName='aws_s3'];
         for(ContentVersion attach: contentVersionsList) {
             try {
@@ -52,7 +53,7 @@ global class uploadFileToAWSBatch implements Database.Batchable<sObject>, Databa
         }
     }
 
-    public void uploadmultipart(ContentVersion attach, String uploadid, Integer lengthOfFile) {
+    public static void uploadmultipart(ContentVersion attach, String uploadid, Integer lengthOfFile) {
         Integer chunkSize = 7 * 1000 * 1000; // 5 MB
         Integer totalChunks = integer.valueOf(Math.ceil(Decimal.valueOf(lengthOfFile).divide(chunkSize, /*digits*/ 8)));
         String presignedUrl = '';
@@ -70,15 +71,15 @@ global class uploadFileToAWSBatch implements Database.Batchable<sObject>, Databa
             System.debug('cn ** ==> ' + (totalChunks-1) + ' ** i ==>' + i);
 
             if(i== (totalChunks-1)) {
-	            requestUploadMultiPart(presignedUrl, chunkStart, chunkEnd, attach.VersionData, partNumber, attach.Title, attach.FileExtension, true, uploadid, chunkSize);
+	            uploadFileToAWSBatch.requestUploadMultiPart(presignedUrl, chunkStart, chunkEnd, attach.VersionData, partNumber, attach.Title, attach.FileExtension, true, uploadid, chunkSize);
             } else {
-                requestUploadMultiPart(presignedUrl, chunkStart, chunkEnd, attach.VersionData, partNumber, attach.Title, attach.FileExtension, false, uploadid, chunkSize);
+                uploadFileToAWSBatch.requestUploadMultiPart(presignedUrl, chunkStart, chunkEnd, attach.VersionData, partNumber, attach.Title, attach.FileExtension, false, uploadid, chunkSize);
             }
             partNumber++;
         }
     }
 
-    public void requestUploadMultiPart(String url, Integer start, Integer endd, Blob body, Integer i, String fileName, String FileExe, Boolean flag, String uploadId, Integer chunkSize) {
+    public static void requestUploadMultiPart(String url, Integer start, Integer endd, Blob body, Integer i, String fileName, String FileExe, Boolean flag, String uploadId, Integer chunkSize) {
         System.debug('** start ==>' + start + ' -- endd ==>' + endd);
         System.debug('Heap size current ==> ' + Limits.getHeapSize());
         System.debug('Heap size Limit ==> ' + Limits.getLimitHeapSize());
@@ -109,11 +110,11 @@ global class uploadFileToAWSBatch implements Database.Batchable<sObject>, Databa
             System.debug('Error uploading chunk ' + i + ': ' + response.getBody());
         }
         if(flag){
-            completeFile(fileName, FileExe, uploadId, String.valueOf(i));
+            uploadFileToAWSBatch.completeFile(fileName, FileExe, uploadId, String.valueOf(i));
         }
     }
 
-    public void completeFile(String filename, String fileExtansion, String uploadId, String maxPart) {
+    public static void completeFile(String filename, String fileExtansion, String uploadId, String maxPart) {
         HttpRequest reqLs = new HttpRequest();
         reqLs.setMethod('GET');
         reqLs.setEndpoint('callout:aws_s3/test-mv-1/' + filename + '.' + fileExtansion + '?uploadId=' + uploadId + '&max-parts=' + maxPart + '&part-number-marker=0');
