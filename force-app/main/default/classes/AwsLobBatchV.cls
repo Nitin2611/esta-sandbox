@@ -3,7 +3,9 @@ global class AwsLobBatchV implements Database.Batchable<sObject>, Database.Allow
         // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id=: '068Aa000000I0ZRIA0' ]);
         // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id=: '068Aa000000HginIAC' ]);
         // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id = '068Aa000000Hhq9IAC' ]);  //10 MB
-        return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id != '068Aa000000I0ZRIA0' ]);  //100 MB
+        // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id != '068Aa000000I0ZRIA0' ]);  //100 MB
+        // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id = '068Aa000000IJNZIA4' ]);  //100 MB
+        return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion]);  //100 MB
     }
     global void execute(Database.BatchableContext bc, List<ContentVersion> records){
 
