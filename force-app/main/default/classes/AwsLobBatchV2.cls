@@ -1,38 +1,38 @@
-global class AwsLobBatchV implements Database.Batchable<sObject>, Database.AllowsCallouts {
+global class AwsLobBatchV2 implements Database.Batchable<sObject>, Database.AllowsCallouts {
     public Database.QueryLocator start(Database.BatchableContext bc) {    
-        // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id=: '068Aa000000I0ZRIA0' ]);
-        // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id=: '068Aa000000HginIAC' ]);
-        // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id = '068Aa000000Hhq9IAC' ]);  //10 MB
-        // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id != '068Aa000000I0ZRIA0' ]);  //100 MB
-        // return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion WHERE Id = '068Aa000000IJH7IAO' ]);  //100 MB
-        return Database.getQueryLocator([SELECT VersionData,Title,ContentDocumentId,FileExtension,contentsize FROM ContentVersion]);  //100 MB
+        return Database.getQueryLocator(
+            [SELECT VersionData, Title, ContentDocumentId, FileExtension, contentsize FROM ContentVersion]
+            // [SELECT VersionData, Title, ContentDocumentId, FileExtension, contentsize FROM ContentVersion WHERE Id = '068Aa000000IJIjIAO']
+        );
     }
-    global void execute(Database.BatchableContext bc, List<ContentVersion> records){
 
+    global void execute(Database.BatchableContext bc, List<ContentVersion> records){
         NamedCredential named=[SELECT DeveloperName, Endpoint FROM NamedCredential where DeveloperName='aws_s3'];
         for(ContentVersion attach:records) {
             try {
-                Decimal abc = EncodingUtil.base64Encode(attach.VersionData).length();
-
-
+                Decimal lengthOfFile = EncodingUtil.base64Encode(attach.VersionData).length();
                 String formattedDateString = Datetime.now().formatGMT('EEE, dd MMM yyyy HH:mm:ss z');
                 String filename = attach.Title;
                 String fileExtansion = attach.FileExtension;
 
-                HttpRequest req = new HttpRequest();
-                req.setMethod('POST');
-                req.setHeader('Content-Type', 'application/octet-stream');
-                req.setEndpoint('callout:aws_s3/test-mv-1/' + filename + '.' + fileExtansion + '?uploads' );
-                
-                Http http = new Http();
-                HTTPResponse res = http.send(req);
-                
-                String uploadId = '';
-                String responseBody = res.getBody();
-                if (responseBody != null && responseBody.contains('UploadId')) {
-                    uploadId = responseBody.substringBetween('<UploadId>', '</UploadId>');
+                if (attach.contentsize < (11 * 1024 * 1024)) {
+                    uploadObject(filename, fileExtansion, attach.VersionData);
+                } else {
+                    HttpRequest req = new HttpRequest();
+                    req.setMethod('POST');
+                    req.setHeader('Content-Type', 'application/octet-stream');
+                    req.setEndpoint('callout:aws_s3/test-mv-1/' + filename + '.' + fileExtansion + '?uploads' );
+                    
+                    Http http = new Http();
+                    HTTPResponse res = http.send(req);
+                    
+                    String uploadId = '';
+                    String responseBody = res.getBody();
+                    if (responseBody != null && responseBody.contains('UploadId')) {
+                        uploadId = responseBody.substringBetween('<UploadId>', '</UploadId>');
+                    }
+                    AwsLobBatchV2.uploadmultipart(attach,uploadId, lengthOfFile);
                 }
-                uploadmultipart(attach,uploadId, abc);
 
             } catch (Exception e) {
                 System.debug('In the catch block of UploadDocuments ==>');
@@ -46,15 +46,14 @@ global class AwsLobBatchV implements Database.Batchable<sObject>, Database.Allow
 
     }
     
+    public static void uploadmultipart(ContentVersion attach, String uploadid, Decimal lengthOfFile) {
 
-    public void uploadmultipart(ContentVersion attach, String uploadid, Decimal abc) {
-
-        Integer chunkSize = 7 * 1024 * 1024; // 5 MB
-        Blob fileBlob = attach.VersionData;// get the file blob to be uploaded
-        //Integer totalChunks = integer.valueOf(Math.ceil(fileBlob.size() / chunkSize));\
-        // Decimal abc = EncodingUtil.base64Encode(fileBlob).length();
-        System.debug('File length----->' + abc);
-        Integer totalChunks = integer.valueOf(Math.ceil(abc.divide(chunkSize, /*digits*/ 10)));
+        // Integer chunkSize = 7 * 1024 * 1024; // 5 MB
+        // Integer chunkSize = 7 * 1000 * 1000; // 5 MB
+        Integer chunkSize = 8 * 1000 * 1000; // 5 MB
+        // Blob fileBlob = attach.VersionData;// get the file blob to be uploaded
+        System.debug('File length----->' + lengthOfFile);
+        Integer totalChunks = integer.valueOf(Math.ceil(lengthOfFile.divide(chunkSize, /*digits*/ 10)));
         String presignedUrl = '';
         Integer partNumber =1;
         System.debug('totalChunks size ==>' + totalChunks);
@@ -63,54 +62,38 @@ global class AwsLobBatchV implements Database.Batchable<sObject>, Database.Allow
         for (Integer i = 0; i < totalChunks; i++) {
             presignedUrl = 'callout:aws_s3/test-mv-1/' + attach.Title + '.' + attach.FileExtension + '?partNumber=' + partNumber + '&uploadId=' + uploadid;
             Integer chunkStart = i * chunkSize;
-            Integer chunkEnd = Math.min((i + 1) * chunkSize - 1, integer.valueOf(abc) - 1);
+            Integer chunkEnd = Math.min((i + 1) * chunkSize - 1, integer.valueOf(lengthOfFile) - 1);
             Integer chunkLength = chunkEnd - chunkStart + 1;
 
 
             System.debug('Start ---->' + chunkStart);
             System.debug('End ---->' + chunkEnd);
 
+            System.debug('* Heap size current ==> ' + Limits.getHeapSize());
+            System.debug('* Heap size Limit ==> ' + Limits.getLimitHeapSize());
 
-            // String attachmentBody = EncodingUtil.base64Encode(attach.VersionData).mid(chunkStart, 7 * 1024 * 1024);
+            String attachmentBody = EncodingUtil.base64Encode(attach.VersionData).mid(chunkStart, chunkSize);
             // System.debug('attachmentBody-->'+attachmentBody);
-            // Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody);
-            Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(attach.VersionData).mid(chunkStart, 7 * 1024 * 1024));
+            Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody);
+            // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(attach.VersionData).mid(chunkStart, chunkSize));
 
+            System.debug(' Heap size current ==> ' + Limits.getHeapSize());
+            System.debug(' Heap size Limit ==> ' + Limits.getLimitHeapSize());
 
             if(i== (totalChunks-1)) {
-	            submethod(presignedUrl,chunkStart,chunkEnd,chunkBlob,fileBlob.size(),partNumber,attach.Title,attach.FileExtension,true,uploadid);
+	            AwsLobBatchV2.submethod(presignedUrl, chunkStart, chunkEnd, chunkBlob, partNumber, attach.Title, attach.FileExtension, true, uploadid);
 
             } else {
                 system.debug( 'ELSEE : Heap size is ' + limits.getHeapSize() + ' enforced is ' + limits.getLimitHeapSize());
-	            submethod(presignedUrl,chunkStart,chunkEnd,chunkBlob,fileBlob.size(),partNumber,attach.Title,attach.FileExtension,false,uploadid);
+	            AwsLobBatchV2.submethod(presignedUrl, chunkStart, chunkEnd, chunkBlob, partNumber, attach.Title, attach.FileExtension, false, uploadid);
             }
             partNumber++;
         }
     }
 
     // @future(callout=true)
-    public void submethod(String url,Integer start,Integer endd,Blob body,Integer sizeFile,Integer i,String fileName,String FileExe,Boolean flag,String uploadId) {
-        
-        // String attachmentBody = EncodingUtil.base64Encode(body);
-        // // Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody.mid(start, endd));
-
-        // System.debug('Start ---->' + start);
-        // System.debug('End ---->' + endd);
-
-
-        // // String attachmentBody = EncodingUtil.base64Encode(body).substring(start, endd + 1);
-        // // System.debug('attachmentBody-->'+attachmentBody);
-        // // Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody);
-        // // Blob chunkBlob = EncodingUtil.base64Decode(EncodingUtil.base64Encode(body).substring(start, endd + 1));
-
-        // String attachmentBody = EncodingUtil.base64Encode(body).mid(start, 7 * 1024 * 1024);
-        // System.debug('attachmentBody-->'+attachmentBody);
-        // Blob chunkBlob = EncodingUtil.base64Decode(attachmentBody);
-        // // System.debug('chunkBlob-->'+chunkBlob);
-        // // System.debug('chunkBlob-->'+chunkBlob.size());
-
+    public static void submethod(String url, Integer start, Integer endd, Blob body, Integer i, String fileName, String FileExe, Boolean flag, String uploadId) {
         System.debug('A');
-
         HttpRequest request = new HttpRequest();
         request.setMethod('PUT');
         request.setEndpoint(url);
@@ -133,7 +116,7 @@ global class AwsLobBatchV implements Database.Batchable<sObject>, Database.Allow
         
         if(flag){
             System.debug('Final Chunk Value ---> ' + i + 'String value of i ' + String.valueOf(i));
-            completeFile(fileName,FileExe,uploadId, String.valueOf(i));
+            AwsLobBatchV2.completeFile(fileName,FileExe,uploadId, String.valueOf(i));
         }
     }
 
@@ -186,5 +169,30 @@ global class AwsLobBatchV implements Database.Batchable<sObject>, Database.Allow
         
         system.debug('Status code httpCmp------> '+resCmp.getStatusCode());
         system.debug('Status httpCmp------> '+resCmp.getStatus());
+        system.debug('Body httpCmp------> '+resCmp.getBody());
+    }
+
+    public void uploadObject(String filename, String fileExtansion, Blob body) {
+        try {
+            HttpRequest reqObj = new HttpRequest();
+            reqObj.setMethod('PUT');
+            reqObj.setBodyAsBlob(body);
+            reqObj.setEndpoint('callout:aws_s3/test-mv-1/' + filename + '.' + fileExtansion);
+            
+            Http httpObj = new Http();
+            HTTPResponse resObj = httpObj.send(reqObj);
+            System.debug('resObj Body ==>' + resObj.getBody() + ' - res Status Code ==> ' + resObj.getStatusCode() + ' - res Status ==> ' + resObj.getStatus());
+
+            if (resObj.getStatusCode() == 200 || resObj.getStatusCode() == 201) {
+                System.debug('File uploaded successfully');
+            } else {
+                System.debug('Error on uploading fiels');
+            }
+            
+        } catch (Exception e) {
+            System.debug('In the catch block of uploadObject ==>');
+            System.debug('--Line number ==>' + e.getLineNumber() + '-- Message ==>' + e.getMessage());
+            System.debug(e);
+        }
     }
 }
